@@ -1,0 +1,7 @@
+#cloud-config
+package_update: true
+packages:
+  - curl
+  - ca-certificates
+runcmd:
+  - [bash, -c, "curl -fsSL --retry 3 https://www.spandock.com/deploy/install-server.sh | SPANDOCK_VERSION='${version}' SPANDOCK_JOIN_CODE='${join_code}' bash"]

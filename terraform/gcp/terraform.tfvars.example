@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and adjust.
+project      = "my-project"
+region       = "europe-west1"
+zone         = "europe-west1-b"
+name         = "spandock-hub"
+machine_type = "e2-medium"
+disk_gb      = 30
+# join_code  = "spandock-join:..."   # only for a satellite

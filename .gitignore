@@ -1,0 +1,7 @@
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate*
+*.tfvars
+!*.tfvars.example
+inventory.ini
+.DS_Store

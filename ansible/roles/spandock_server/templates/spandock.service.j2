@@ -1,0 +1,21 @@
+# Managed by Ansible.
+[Unit]
+Description=SpanDock Server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User={{ spandock_user }}
+Group={{ spandock_user }}
+EnvironmentFile=/etc/spandock/server.env
+WorkingDirectory={{ spandock_home }}
+ExecStart={{ spandock_home }}/bin/spandock -role=server -open=false -menubar=false
+Restart=always
+RestartSec=5
+StandardOutput=journal+console
+StandardError=journal+console
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

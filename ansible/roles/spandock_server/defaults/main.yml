@@ -1,0 +1,7 @@
+# Release tag, for example v0.14.0; "latest" installs the newest release.
+spandock_version: latest
+# Single-use join code from the hub, to add this host as a satellite. Empty: a hub.
+spandock_join_code: ""
+spandock_user: spandock
+spandock_home: /var/lib/spandock
+spandock_releases: https://github.com/SpanDock/spandock-releases/releases

@@ -1,0 +1,109 @@
+- name: Check the platform (64-bit, glibc 2.38 or later)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.architecture in ['x86_64', 'aarch64']
+      - ansible_facts.service_mgr == 'systemd'
+    fail_msg: SpanDock needs an x86-64 or ARM64 Linux host with systemd.
+
+- name: Read the glibc version
+  ansible.builtin.command: getconf GNU_LIBC_VERSION
+  register: spandock_glibc
+  changed_when: false
+
+- name: Require glibc 2.38 or later (Ubuntu 24.04, Debian 13, RHEL 10 or newer)
+  ansible.builtin.assert:
+    that: spandock_glibc.stdout.split()[1] is version('2.38', '>=')
+    fail_msg: "glibc {{ spandock_glibc.stdout.split()[1] }} is too old for SpanDock; use Ubuntu 24.04, Debian 13 or newer."
+
+- name: Pick the download
+  ansible.builtin.set_fact:
+    spandock_arch: "{{ 'arm64' if ansible_facts.architecture == 'aarch64' else 'amd64' }}"
+    spandock_base: "{{ spandock_releases }}/{{ 'latest/download' if spandock_version == 'latest' else 'download/' + spandock_version }}"
+
+- name: Create the service account
+  ansible.builtin.user:
+    name: "{{ spandock_user }}"
+    system: true
+    home: "{{ spandock_home }}"
+    create_home: true
+    shell: /usr/sbin/nologin
+
+- name: Create the binary directory (owned by the service, so it can update itself)
+  ansible.builtin.file:
+    path: "{{ spandock_home }}/bin"
+    state: directory
+    owner: "{{ spandock_user }}"
+    group: "{{ spandock_user }}"
+    mode: "0750"
+
+- name: Download the release (checked against checksums.txt)
+  ansible.builtin.get_url:
+    url: "{{ spandock_base }}/spandock-linux-{{ spandock_arch }}.tar.gz"
+    dest: "/tmp/spandock-linux-{{ spandock_arch }}.tar.gz"
+    checksum: "sha256:{{ spandock_base }}/checksums.txt"
+    mode: "0644"
+  register: spandock_download
+
+- name: Install the binary
+  ansible.builtin.unarchive:
+    src: "/tmp/spandock-linux-{{ spandock_arch }}.tar.gz"
+    dest: "{{ spandock_home }}/bin"
+    remote_src: true
+    include: [spandock]
+    owner: "{{ spandock_user }}"
+    group: "{{ spandock_user }}"
+  when: spandock_download.changed
+  notify: Restart spandock
+
+- name: Create /etc/spandock
+  ansible.builtin.file:
+    path: /etc/spandock
+    state: directory
+    group: "{{ spandock_user }}"
+    mode: "0750"
+
+- name: Write the environment file
+  ansible.builtin.template:
+    src: server.env.j2
+    dest: /etc/spandock/server.env
+    owner: root
+    group: "{{ spandock_user }}"
+    mode: "0640"
+  no_log: "{{ spandock_join_code | length > 0 }}"
+  notify: Restart spandock
+
+- name: Install the systemd unit
+  ansible.builtin.template:
+    src: spandock.service.j2
+    dest: /etc/systemd/system/spandock.service
+    mode: "0644"
+  notify: Restart spandock
+
+- name: Enable and start SpanDock
+  ansible.builtin.systemd:
+    name: spandock
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Apply restarts now
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the activation link or a healthy server (new hubs need one approval)
+  ansible.builtin.shell: |
+    set -o pipefail
+    link=$(journalctl -u spandock --no-pager -o cat | grep -oE 'https://[^[:space:]]*activate[^[:space:]]*' | tail -n1 || true)
+    if curl -fsS -o /dev/null http://127.0.0.1:4318/healthz; then echo "healthy"; elif [ -n "$link" ]; then echo "$link"; else exit 1; fi
+  args:
+    executable: /bin/bash
+  register: spandock_state
+  retries: 30
+  delay: 3
+  until: spandock_state.rc == 0
+  changed_when: false
+  when: not spandock_join_code
+
+- name: Show what to do next
+  ansible.builtin.debug:
+    msg: "{{ 'SpanDock is activated and healthy.' if spandock_state.stdout == 'healthy' else 'Approve this server on spandock.com (sign in, check the code matches): ' + spandock_state.stdout }}"
+  when: not spandock_join_code

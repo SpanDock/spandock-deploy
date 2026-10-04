@@ -1,0 +1,15 @@
+#cloud-config
+# SpanDock server on any cloud VM: paste this as "user data" when you create the machine.
+# Works on Ubuntu 24.04 or later and Debian 13 (DigitalOcean, Hetzner, Akamai/Linode, Vultr,
+# AWS, Google Cloud, Azure and others). No inbound port is needed.
+#
+# After the machine boots, open its serial console (or run `journalctl -u spandock` over SSH):
+# it shows a link to approve the server on spandock.com, once.
+#
+# To add a satellite instead, put the hub's join code in the line below.
+package_update: true
+packages:
+  - curl
+  - ca-certificates
+runcmd:
+  - [bash, -c, "curl -fsSL --retry 3 https://www.spandock.com/deploy/install-server.sh | SPANDOCK_JOIN_CODE='' bash"]

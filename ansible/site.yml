@@ -1,0 +1,7 @@
+# Installs SpanDock servers (hubs and satellites) on the hosts in your inventory.
+#   ansible-playbook -i inventory.ini site.yml
+- name: SpanDock servers
+  hosts: spandock_servers
+  become: true
+  roles:
+    - spandock_server
