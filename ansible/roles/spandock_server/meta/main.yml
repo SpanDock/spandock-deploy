@@ -1,0 +1,16 @@
+galaxy_info:
+  role_name: server
+  namespace: spandock
+  author: SpanDock
+  description: Install a SpanDock server (hub or satellite) as a systemd service.
+  license: Apache-2.0
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions: [noble]
+    - name: Debian
+      versions: [trixie]
+    - name: EL
+      versions: ["10"]
+  galaxy_tags: [spandock, observability, opentelemetry, ai, monitoring]
+dependencies: []
