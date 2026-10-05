@@ -124,8 +124,112 @@ cat >/usr/local/bin/spandock <<WRAPPER
 #!/bin/sh
 # SpanDock's command line on this server: runs SpanDock commands as the $SVC_USER service account,
 # with the service's settings. The server itself runs as the "spandock" systemd service.
+#   sudo spandock onboard     answer a few questions (hub or satellite, public endpoint)
+# Generated from deploy/spandock-cli.sh.in by install-server.sh and the Ansible role.
 SVC=$SVC_USER
 SVC_HOME=$HOME_DIR
+ENV_FILE=/etc/spandock/server.env
+
+# ─── spandock onboard: set the server up by answering questions (as root) ─────
+onboard() {
+  [ "\$(id -u)" = 0 ] || { echo "Run it as root: sudo spandock onboard" >&2; exit 1; }
+  [ -r /dev/tty ] || { echo "spandock onboard needs a terminal." >&2; exit 1; }
+  ask() { printf '%s' "\$1" >/dev/tty; IFS= read -r REPLY </dev/tty || exit 1; }
+  ask_secret() {
+    printf '%s' "\$1" >/dev/tty
+    stty -echo </dev/tty 2>/dev/null
+    IFS= read -r REPLY </dev/tty
+    stty echo </dev/tty 2>/dev/null
+    printf '\\n' >/dev/tty
+  }
+  # Values go into an env file: letters, digits and . _ : @ + = / ~ - only.
+  valid() { case "\$1" in "" | *[!A-Za-z0-9._:@+=/~-]*) return 1 ;; esac; }
+  set_var() {
+    tmp="\$(mktemp)"
+    { grep -v "^\$1=" "\$ENV_FILE" || true; printf '%s=%s\\n' "\$1" "\$2"; } >"\$tmp"
+    cat "\$tmp" >"\$ENV_FILE" # keeps the file's owner and mode (root:\$SVC 0640)
+    rm -f "\$tmp"
+  }
+
+  echo "Set up this SpanDock server. Your answers are saved in \$ENV_FILE and used when the service starts."
+  echo "Use it on a new server, before it's activated or joined; it doesn't change a server that's already set up."
+  echo
+  echo "  1) A new server (a hub). You'll approve it once on spandock.com."
+  echo "  2) A satellite of an existing hub. You'll need a join code from the hub."
+  ask "Which one? [1] "
+  role="\${REPLY:-1}"
+  join=""
+  if [ "\$role" = 2 ]; then
+    echo "On the hub: Settings → Scaling → Add server, then copy the join code (it works once, for 30 minutes)."
+    ask_secret "Join code (hidden): "
+    join="\$REPLY"
+    valid "\$join" || { echo "That doesn't look like a join code." >&2; exit 1; }
+  elif [ "\$role" != 1 ]; then
+    echo "Choose 1 or 2." >&2
+    exit 1
+  fi
+
+  echo
+  echo "The public endpoint lets cloud tools and remote clients reach this server over HTTPS."
+  echo "It needs inbound TCP 443 and a DNS record <name>.<domain> pointing at this machine."
+  ask "Turn it on? [y/N] "
+  public=""
+  case "\$REPLY" in y | Y | yes | YES) public=1 ;; esac
+  name="" domain="" email=""
+  if [ -n "\$public" ]; then
+    ask "Name (the first part of the address, e.g. edge): "
+    name="\$REPLY"
+    valid "\$name" || { echo "Use letters, digits and hyphens." >&2; exit 1; }
+    if [ "\$role" = 1 ]; then
+      ask "Domain (e.g. example.com): "
+      domain="\$REPLY"
+      valid "\$domain" || { echo "That doesn't look like a domain." >&2; exit 1; }
+    fi
+    ask "Email for the HTTPS certificate (optional): "
+    email="\$REPLY"
+    [ -z "\$email" ] || valid "\$email" || { echo "That doesn't look like an email address." >&2; exit 1; }
+  fi
+
+  echo
+  echo "About to save:"
+  [ "\$role" = 2 ] && echo "  satellite, with the join code you entered" || echo "  a new hub"
+  shown_domain="\$domain"
+  [ -n "\$shown_domain" ] || shown_domain="<the hub's domain>"
+  [ -n "\$public" ] && echo "  public endpoint https://\$name.\$shown_domain"
+  ask "Save and restart the service? [Y/n] "
+  case "\$REPLY" in n | N | no | NO) echo "Nothing saved."; exit 1 ;; esac
+
+  [ -n "\$join" ] && set_var SPANDOCK_JOIN_CODE "\$join"
+  if [ -n "\$public" ]; then
+    set_var SPANDOCK_PUBLIC_LISTEN 0.0.0.0:443
+    set_var SPANDOCK_PUBLIC_NAME "\$name"
+    [ -n "\$domain" ] && set_var SPANDOCK_PUBLIC_DOMAIN "\$domain"
+    [ -n "\$email" ] && set_var SPANDOCK_ACME_EMAIL "\$email"
+  fi
+  systemctl restart spandock
+  echo "Saved. The service is restarting."
+  if [ "\$role" = 2 ]; then
+    echo "It joins the hub on this start, then keeps its settings across restarts. Follow it with: journalctl -u spandock -f"
+    exit 0
+  fi
+  i=0
+  while [ "\$i" -lt 30 ]; do
+    link="\$(journalctl -u spandock --no-pager -o cat --since '-2 min' 2>/dev/null | grep -oE 'https://[^[:space:]]*activate[^[:space:]]*' | tail -n1)"
+    if [ -n "\$link" ]; then
+      printf '\\nApprove this server (sign in, check the code matches, approve):\\n\\n    %s\\n\\n' "\$link"
+      exit 0
+    fi
+    i=\$((i + 1))
+    sleep 2
+  done
+  echo "No activation link yet (it may already be activated). Follow it with: journalctl -u spandock -f"
+  exit 0
+}
+
+if [ "\${1:-}" = onboard ]; then
+  onboard
+fi
+
 if [ "\$(id -un)" != "\$SVC" ]; then
   if [ "\$(id -u)" = 0 ] && command -v runuser >/dev/null 2>&1; then exec runuser -u "\$SVC" -- "\$0" "\$@"; fi
   exec sudo -u "\$SVC" -- "\$0" "\$@"
@@ -134,11 +238,11 @@ case "\${1:-}" in
   "" | -role | -role=*)
     # A second server process would fight the service for its ports.
     echo "SpanDock runs as a service here: systemctl status spandock, journalctl -u spandock -f" >&2
-    echo "Commands: spandock license status|login, spandock admin pair|clients|approve|management-token|reset-login, spandock service ..., spandock -version" >&2
+    echo "Commands: sudo spandock onboard, spandock license status|login, spandock admin pair|clients|approve|management-token|reset-login, spandock service ..., spandock -version" >&2
     exit 2 ;;
 esac
 set -a
-. /etc/spandock/server.env
+. "\$ENV_FILE"
 set +a
 unset SPANDOCK_JOIN_CODE XDG_CONFIG_HOME
 export HOME="\$SVC_HOME"
@@ -156,6 +260,7 @@ next_steps() {
   cat <<'STEPS'
 
 Next steps:
+  sudo spandock onboard            set it up by answering questions: hub or satellite, public endpoint
   spandock license status          the server's license
   spandock admin pair              add a client (prints a pairing code)
   journalctl -u spandock -f        follow the server's log

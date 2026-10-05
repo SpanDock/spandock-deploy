@@ -1,11 +1,10 @@
 #!/bin/sh
-# Managed by Ansible.
-# SpanDock's command line on this server: runs SpanDock commands as the {{ spandock_user }} service account,
+# SpanDock's command line on this server: runs SpanDock commands as the @SVC@ service account,
 # with the service's settings. The server itself runs as the "spandock" systemd service.
 #   sudo spandock onboard     answer a few questions (hub or satellite, public endpoint)
 # Generated from deploy/spandock-cli.sh.in by install-server.sh and the Ansible role.
-SVC={{ spandock_user }}
-SVC_HOME={{ spandock_home }}
+SVC=@SVC@
+SVC_HOME=@HOME@
 ENV_FILE=/etc/spandock/server.env
 
 # ─── spandock onboard: set the server up by answering questions (as root) ─────
