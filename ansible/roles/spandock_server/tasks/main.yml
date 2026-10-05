@@ -72,6 +72,14 @@
   no_log: "{{ spandock_join_code | length > 0 }}"
   notify: Restart spandock
 
+- name: Install the spandock command (runs CLI commands as the service account)
+  ansible.builtin.template:
+    src: spandock-cli.j2
+    dest: /usr/local/bin/spandock
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Install the systemd unit
   ansible.builtin.template:
     src: spandock.service.j2

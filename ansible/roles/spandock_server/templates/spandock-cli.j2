@@ -1,0 +1,23 @@
+#!/bin/sh
+# Managed by Ansible.
+# SpanDock's command line on this server: runs SpanDock commands as the {{ spandock_user }} service account,
+# with the service's settings. The server itself runs as the "spandock" systemd service.
+SVC={{ spandock_user }}
+SVC_HOME={{ spandock_home }}
+if [ "$(id -un)" != "$SVC" ]; then
+  if [ "$(id -u)" = 0 ] && command -v runuser >/dev/null 2>&1; then exec runuser -u "$SVC" -- "$0" "$@"; fi
+  exec sudo -u "$SVC" -- "$0" "$@"
+fi
+case "${1:-}" in
+  "" | -role | -role=*)
+    # A second server process would fight the service for its ports.
+    echo "SpanDock runs as a service here: systemctl status spandock, journalctl -u spandock -f" >&2
+    echo "Commands: spandock license status|login, spandock admin pair|clients|approve|management-token|reset-login, spandock service ..., spandock -version" >&2
+    exit 2 ;;
+esac
+set -a
+. /etc/spandock/server.env
+set +a
+unset SPANDOCK_JOIN_CODE XDG_CONFIG_HOME
+export HOME="$SVC_HOME"
+exec "$SVC_HOME/bin/spandock" "$@"

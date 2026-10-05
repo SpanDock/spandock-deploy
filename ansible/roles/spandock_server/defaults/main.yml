@@ -5,3 +5,9 @@ spandock_join_code: ""
 spandock_user: spandock
 spandock_home: /var/lib/spandock
 spandock_releases: https://github.com/SpanDock/spandock-releases/releases
+# Public endpoint with automatic HTTPS (v0.18 or later), applied when the server starts with none
+# configured. Needs inbound TCP 443 and a DNS record <name>.<domain> for this host. Empty: off.
+spandock_public_listen: ""
+spandock_public_name: ""
+spandock_public_domain: ""
+spandock_acme_email: ""

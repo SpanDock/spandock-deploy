@@ -9,8 +9,17 @@
 #   SPANDOCK_JOIN_CODE  join an existing hub as a satellite (a single-use code from the hub)
 #   SPANDOCK_USER       the service account (default: spandock)
 #
+# Public endpoint with automatic HTTPS (v0.18 or later; first start only, then Settings → Public
+# endpoint). It needs inbound TCP 443 and a DNS record <name>.<domain> pointing at this machine:
+#   SPANDOCK_PUBLIC_LISTEN   e.g. 0.0.0.0:443
+#   SPANDOCK_PUBLIC_NAME     e.g. edge
+#   SPANDOCK_PUBLIC_DOMAIN   e.g. example.com (not on a satellite: it takes the hub's)
+#   SPANDOCK_PUBLIC_TLS      acme (default), files or proxy
+#   SPANDOCK_ACME_EMAIL      the certificate contact address
+#
 # Needs: a 64-bit x86 or ARM machine with glibc 2.38 or later (Ubuntu 24.04, Debian 13, RHEL 10,
-# Fedora 39 or newer), systemd, curl, and outbound HTTPS. No inbound port is needed.
+# Fedora 39 or newer), systemd, curl, and outbound HTTPS. No inbound port is needed unless the
+# public endpoint is on.
 set -euo pipefail
 
 VERSION="${SPANDOCK_VERSION:-latest}"
@@ -68,6 +77,14 @@ if [ -n "${SPANDOCK_JOIN_CODE:-}" ]; then
   { grep -v '^SPANDOCK_JOIN_CODE=' "$ENV_FILE" || true; printf 'SPANDOCK_JOIN_CODE=%s\n' "$SPANDOCK_JOIN_CODE"; } >"$ENV_FILE.new"
   mv "$ENV_FILE.new" "$ENV_FILE"
 fi
+# First-start settings for the public endpoint, kept in the env file (the server reads them once).
+for var in SPANDOCK_PUBLIC_LISTEN SPANDOCK_PUBLIC_NAME SPANDOCK_PUBLIC_DOMAIN SPANDOCK_PUBLIC_TLS SPANDOCK_ACME_EMAIL; do
+  val="${!var:-}"
+  [ -n "$val" ] || continue
+  case "$val" in *[[:space:]\'\"\$\`]*) die "$var has characters that aren't allowed" ;; esac
+  { grep -v "^$var=" "$ENV_FILE" || true; printf '%s=%s\n' "$var" "$val"; } >"$ENV_FILE.new"
+  mv "$ENV_FILE.new" "$ENV_FILE"
+done
 chown root:"$SVC_USER" "$ENV_FILE"
 chmod 0640 "$ENV_FILE"
 
@@ -85,9 +102,15 @@ WorkingDirectory=$HOME_DIR
 ExecStart=$BIN_DIR/spandock -role=server -open=false -menubar=false
 Restart=always
 RestartSec=5
+# Stopping the old process must not kill the self-update helper: it waits for the new version to
+# answer and rolls back a broken update.
+KillMode=process
 # The activation link also goes to the serial console, which every cloud can show you.
 StandardOutput=journal+console
 StandardError=journal+console
+# Lets the public endpoint listen on 443 without running as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 PrivateTmp=true
 
@@ -95,10 +118,51 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
+# The "spandock" command for this machine (root-owned): runs CLI commands as the service account
+# with the service's settings, and refuses to start a second server.
+cat >/usr/local/bin/spandock <<WRAPPER
+#!/bin/sh
+# SpanDock's command line on this server: runs SpanDock commands as the $SVC_USER service account,
+# with the service's settings. The server itself runs as the "spandock" systemd service.
+SVC=$SVC_USER
+SVC_HOME=$HOME_DIR
+if [ "\$(id -un)" != "\$SVC" ]; then
+  if [ "\$(id -u)" = 0 ] && command -v runuser >/dev/null 2>&1; then exec runuser -u "\$SVC" -- "\$0" "\$@"; fi
+  exec sudo -u "\$SVC" -- "\$0" "\$@"
+fi
+case "\${1:-}" in
+  "" | -role | -role=*)
+    # A second server process would fight the service for its ports.
+    echo "SpanDock runs as a service here: systemctl status spandock, journalctl -u spandock -f" >&2
+    echo "Commands: spandock license status|login, spandock admin pair|clients|approve|management-token|reset-login, spandock service ..., spandock -version" >&2
+    exit 2 ;;
+esac
+set -a
+. /etc/spandock/server.env
+set +a
+unset SPANDOCK_JOIN_CODE XDG_CONFIG_HOME
+export HOME="\$SVC_HOME"
+exec "\$SVC_HOME/bin/spandock" "\$@"
+WRAPPER
+chown root:root /usr/local/bin/spandock
+chmod 0755 /usr/local/bin/spandock
+
 systemctl daemon-reload
 systemctl enable spandock >/dev/null
 systemctl restart spandock
 say "SpanDock is running as the spandock service"
+
+next_steps() {
+  cat <<'STEPS'
+
+Next steps:
+  spandock license status          the server's license
+  spandock admin pair              add a client (prints a pairing code)
+  journalctl -u spandock -f        follow the server's log
+  Dashboard: ssh -L 8787:127.0.0.1:8787 <this machine>, then open http://127.0.0.1:8787
+STEPS
+}
+trap next_steps EXIT
 
 if [ -n "${SPANDOCK_JOIN_CODE:-}" ]; then
   say "Joining the hub as a satellite. Check its status with: journalctl -u spandock -f"
