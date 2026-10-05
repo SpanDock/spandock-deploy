@@ -11,6 +11,8 @@ EnvironmentFile=/etc/spandock/server.env
 WorkingDirectory={{ spandock_home }}
 ExecStart={{ spandock_home }}/bin/spandock -role=server -open=false -menubar=false
 Restart=always
+# Exit 78 is a setting SpanDock can't use (such as a refused join code): stop and say so, don't loop.
+RestartPreventExitStatus=78
 RestartSec=5
 # Stopping the old process must not kill the self-update helper (it rolls back a broken update).
 KillMode=process

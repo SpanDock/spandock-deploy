@@ -101,6 +101,8 @@ EnvironmentFile=$ENV_FILE
 WorkingDirectory=$HOME_DIR
 ExecStart=$BIN_DIR/spandock -role=server -open=false -menubar=false
 Restart=always
+# Exit 78 is a setting SpanDock can't use (such as a refused join code): stop and say so, don't loop.
+RestartPreventExitStatus=78
 RestartSec=5
 # Stopping the old process must not kill the self-update helper: it waits for the new version to
 # answer and rolls back a broken update.
@@ -150,6 +152,29 @@ onboard() {
     cat "\$tmp" >"\$ENV_FILE" # keeps the file's owner and mode (root:\$SVC 0640)
     rm -f "\$tmp"
   }
+
+  # A satellite whose join failed (the service stopped, or an older version keeps retrying):
+  # offer a new join code instead of the full setup.
+  if journalctl -u spandock --no-pager -o cat --since '-30 min' 2>/dev/null | grep -q 'join the hub:' &&
+    { systemctl is-failed --quiet spandock || [ "\$(systemctl show -p ActiveState --value spandock 2>/dev/null)" = activating ]; }; then
+    echo "This server couldn't join its hub:"
+    journalctl -u spandock --no-pager -o cat --since '-30 min' 2>/dev/null | grep 'join the hub:' | tail -n1 | sed 's/^/  /'
+    echo "A join code works once, for 30 minutes. If this machine was ever started by hand, that run used it."
+    echo "On the hub: Cluster → Disconnect, then Remove the old record, and create a new code (Settings → Scaling → Add server)."
+    ask "Paste a new join code now? [Y/n] "
+    case "\$REPLY" in
+      n | N | no | NO) ;;
+      *)
+        ask_secret "Join code (hidden): "
+        valid "\$REPLY" || { echo "That doesn't look like a join code." >&2; exit 1; }
+        set_var SPANDOCK_JOIN_CODE "\$REPLY"
+        systemctl reset-failed spandock 2>/dev/null || true
+        systemctl restart spandock
+        echo "Saved. The service is restarting and joins with the new code. Follow it with: journalctl -u spandock -f"
+        exit 0
+        ;;
+    esac
+  fi
 
   echo "Set up this SpanDock server. Your answers are saved in \$ENV_FILE and used when the service starts."
   echo "Use it on a new server, before it's activated or joined; it doesn't change a server that's already set up."
