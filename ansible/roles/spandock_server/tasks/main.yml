@@ -44,7 +44,9 @@
     mode: "0644"
   register: spandock_download
 
-- name: Install the binary
+# Only when a new download arrived: SpanDock updates its own binary, so unpacking the cached
+# archive on every run would roll a self-updated server back.
+- name: Install the binary # noqa: no-handler
   ansible.builtin.unarchive:
     src: "/tmp/spandock-linux-{{ spandock_arch }}.tar.gz"
     dest: "{{ spandock_home }}/bin"
@@ -94,6 +96,25 @@
     state: started
     daemon_reload: true
 
+- name: Install the sidekick units (it restarts a stuck SpanDock and installs critical updates)
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop: [spandock-sidekick.service, spandock-sidekick.path]
+
+- name: Enable the sidekick (the path unit starts it once SpanDock has installed it)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    daemon_reload: true
+  loop: [spandock-sidekick.service, spandock-sidekick.path]
+
+- name: Watch for the sidekick
+  ansible.builtin.systemd:
+    name: spandock-sidekick.path
+    state: started
+
 - name: Apply restarts now
   ansible.builtin.meta: flush_handlers
 
@@ -113,5 +134,7 @@
 
 - name: Show what to do next
   ansible.builtin.debug:
-    msg: "{{ 'SpanDock is activated and healthy.' if spandock_state.stdout == 'healthy' else 'Approve this server on spandock.com (sign in, check the code matches): ' + spandock_state.stdout }}"
+    msg: >-
+      {{ 'SpanDock is activated and healthy.' if spandock_state.stdout == 'healthy'
+      else 'Approve this server on spandock.com (sign in, check the code matches): ' + spandock_state.stdout }}
   when: not spandock_join_code

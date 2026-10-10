@@ -1,0 +1,9 @@
+# Managed by Ansible.
+[Unit]
+Description=Start the SpanDock sidekick once SpanDock has installed it
+
+[Path]
+PathExists={{ spandock_home }}/.config/SpanDock/server/sidekick/spandock-sidekick
+
+[Install]
+WantedBy=multi-user.target

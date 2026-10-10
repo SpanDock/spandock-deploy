@@ -1,5 +1,6 @@
 output "instance" {
-  value = google_compute_instance.spandock.name
+  description = "Name of the Compute Engine instance running SpanDock."
+  value       = google_compute_instance.spandock.name
 }
 
 output "activation" {

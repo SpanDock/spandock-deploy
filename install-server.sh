@@ -120,6 +120,42 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
+# The sidekick (version 0.22 or later): restarts a hung SpanDock and installs a critical update when
+# SpanDock's own updater can't. It runs from a copy SpanDock makes on its first start; the .path
+# unit starts it once that copy exists. No PrivateTmp: it stages updates next to the binary.
+SIDEKICK_DIR="$HOME_DIR/.config/SpanDock/server"
+cat >/etc/systemd/system/spandock-sidekick.service <<EOF
+[Unit]
+Description=SpanDock sidekick (restarts a stuck SpanDock, installs critical updates)
+After=spandock.service
+ConditionPathExists=$SIDEKICK_DIR/sidekick/spandock-sidekick
+
+[Service]
+User=$SVC_USER
+Group=$SVC_USER
+# Optional: a proxy or CA setting here also applies to its update downloads.
+EnvironmentFile=-$ENV_FILE
+ExecStart=$SIDEKICK_DIR/sidekick/spandock-sidekick sidekick -dir $SIDEKICK_DIR
+Restart=always
+RestartSec=30
+KillMode=process
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat >/etc/systemd/system/spandock-sidekick.path <<EOF
+[Unit]
+Description=Start the SpanDock sidekick once SpanDock has installed it
+
+[Path]
+PathExists=$SIDEKICK_DIR/sidekick/spandock-sidekick
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # The "spandock" command for this machine (root-owned): runs CLI commands as the service account
 # with the service's settings, and refuses to start a second server.
 cat >/usr/local/bin/spandock <<WRAPPER
@@ -263,7 +299,7 @@ case "\${1:-}" in
   "" | -role | -role=*)
     # A second server process would fight the service for its ports.
     echo "SpanDock runs as a service here: systemctl status spandock, journalctl -u spandock -f" >&2
-    echo "Commands: sudo spandock onboard, spandock license status|login, spandock admin pair|clients|approve|management-token|reset-login, spandock service ..., spandock -version" >&2
+    echo "Commands: sudo spandock onboard, spandock license status|login, spandock admin pair|clients|approve|management-token|reset-login, spandock service ..., spandock sidekick -once, spandock -version" >&2
     exit 2 ;;
 esac
 set -a
@@ -279,6 +315,8 @@ chmod 0755 /usr/local/bin/spandock
 systemctl daemon-reload
 systemctl enable spandock >/dev/null
 systemctl restart spandock
+systemctl enable spandock-sidekick.service spandock-sidekick.path >/dev/null 2>&1
+systemctl start spandock-sidekick.path
 say "SpanDock is running as the spandock service"
 
 next_steps() {

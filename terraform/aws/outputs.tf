@@ -1,9 +1,11 @@
 output "instance_id" {
-  value = aws_instance.spandock.id
+  description = "ID of the EC2 instance running SpanDock."
+  value       = aws_instance.spandock.id
 }
 
 output "public_ip" {
-  value = aws_instance.spandock.public_ip
+  description = "Public IP of the instance (empty when the subnet assigns none)."
+  value       = aws_instance.spandock.public_ip
 }
 
 output "activation" {

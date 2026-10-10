@@ -1,0 +1,5 @@
+# ansible-lint settings for this kit (site.yml plus roles/spandock_server).
+# The role's variables keep their spandock_ names: they are its documented interface, and renaming
+# them to a spandock_server_ prefix would break existing playbooks and inventories.
+skip_list:
+  - var-naming[no-role-prefix]

@@ -139,7 +139,7 @@ case "${1:-}" in
   "" | -role | -role=*)
     # A second server process would fight the service for its ports.
     echo "SpanDock runs as a service here: systemctl status spandock, journalctl -u spandock -f" >&2
-    echo "Commands: sudo spandock onboard, spandock license status|login, spandock admin pair|clients|approve|management-token|reset-login, spandock service ..., spandock -version" >&2
+    echo "Commands: sudo spandock onboard, spandock license status|login, spandock admin pair|clients|approve|management-token|reset-login, spandock service ..., spandock sidekick -once, spandock -version" >&2
     exit 2 ;;
 esac
 set -a

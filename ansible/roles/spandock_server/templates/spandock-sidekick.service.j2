@@ -1,0 +1,24 @@
+# Managed by Ansible.
+# The sidekick (version 0.22 or later): restarts a hung SpanDock and installs a critical update when
+# SpanDock's own updater can't. It runs from a copy SpanDock makes on its first start;
+# spandock-sidekick.path starts it once that copy exists.
+[Unit]
+Description=SpanDock sidekick (restarts a stuck SpanDock, installs critical updates)
+After=spandock.service
+ConditionPathExists={{ spandock_home }}/.config/SpanDock/server/sidekick/spandock-sidekick
+
+[Service]
+User={{ spandock_user }}
+Group={{ spandock_user }}
+# Optional: a proxy or CA setting here also applies to its update downloads.
+EnvironmentFile=-/etc/spandock/server.env
+ExecStart={{ spandock_home }}/.config/SpanDock/server/sidekick/spandock-sidekick sidekick -dir {{ spandock_home }}/.config/SpanDock/server
+Restart=always
+RestartSec=30
+# It stops SpanDock's process to restart it (spandock.service brings it back): keep its own children.
+KillMode=process
+NoNewPrivileges=true
+# No PrivateTmp: it stages updates next to the binary.
+
+[Install]
+WantedBy=multi-user.target
