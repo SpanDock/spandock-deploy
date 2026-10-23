@@ -2,6 +2,21 @@
 
 Run a [SpanDock](https://www.spandock.com) server on a cloud VM: one paste, one command, Terraform or Ansible. A SpanDock server needs **no inbound port and no public address**; it only connects out.
 
+## One click
+
+| Provider | Button |
+|---|---|
+| AWS | [![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/quickcreate?templateURL=https%3A%2F%2Fspandock-cloud-setup.s3.us-east-1.amazonaws.com%2Fdeploy%2Fspandock-aws.yaml&stackName=spandock) |
+| Microsoft Azure | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fwww.spandock.com%2Fdeploy%2Fazure%2Fazuredeploy.json) |
+| Google Cloud | [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FSpanDock%2Fspandock-deploy&cloudshell_workspace=terraform%2Fgcp) |
+| Oracle Cloud (Always Free) | [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fwww.spandock.com%2Fdeploy%2Fspandock-oracle-stack.zip) |
+| Render | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fspandock%2Fspandock-deploy) |
+| Fly.io | `fly launch --from https://github.com/spandock/spandock-deploy --copy-config --no-deploy && fly deploy` |
+| Hetzner | `hcloud server create --name spandock --type cpx21 --image ubuntu-24.04 --user-data-from-file cloud-init.yaml` |
+| DigitalOcean | `doctl compute droplet create spandock --size s-2vcpu-4gb --image ubuntu-24-04-x64 --region fra1 --user-data-file cloud-init.yaml` |
+
+## Kits
+
 | Kit | Use it for |
 |---|---|
 | [`cloud-init.yaml`](cloud-init.yaml) | Paste as "user data" in any provider's console: DigitalOcean, Hetzner, Akamai, Vultr, AWS, Google Cloud, Azure… |
@@ -9,6 +24,10 @@ Run a [SpanDock](https://www.spandock.com) server on a cloud VM: one paste, one 
 | [`terraform/aws`](terraform/aws) | EC2: Ubuntu 24.04, encrypted gp3, IMDSv2, no inbound rule |
 | [`terraform/gcp`](terraform/gcp) | Compute Engine: Shielded VM, no firewall rule |
 | [`ansible`](ansible) | Hubs and satellites on hosts you manage |
+| [`aws/spandock-aws.yaml`](aws/spandock-aws.yaml) | CloudFormation (the Launch Stack button): EC2 with no inbound rule |
+| [`azure/azuredeploy.json`](azure/azuredeploy.json) | ARM (Deploy to Azure): a VM with no inbound rule |
+| [`oracle`](oracle) | Oracle Resource Manager (Deploy to Oracle Cloud): the Always Free Ampere shape |
+| [`docker-compose.yml`](docker-compose.yml), [`render.yaml`](render.yaml), [`fly.toml`](fly.toml) | The container image `ghcr.io/spandock/spandock` with a volume at `/data` and no public port |
 
 [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FSpanDock%2Fspandock-deploy&cloudshell_workspace=terraform%2Fgcp)
 
