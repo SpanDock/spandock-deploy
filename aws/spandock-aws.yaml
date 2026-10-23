@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  A SpanDock server (hub or satellite) on EC2: Ubuntu 24.04, an encrypted gp3 disk, IMDSv2, and a
+  security group with no inbound rule (SpanDock only connects out). After it boots, open the
+  instance's Monitor and troubleshoot -> Get system log (or the serial console) for the link that
+  activates the server, once. https://www.spandock.com/docs/deploy
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: Server }
+        Parameters: [InstanceType, Architecture, DiskGB]
+      - Label: { default: Optional }
+        Parameters: [JoinCode, SpanDockVersion, KeyName, SshCidr]
+    ParameterLabels:
+      JoinCode: { default: "Hub join code (only for a satellite)" }
+      SpanDockVersion: { default: "SpanDock version (empty: the latest)" }
+      SshCidr: { default: "Allow SSH from (empty: no SSH)" }
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    Description: 2 vCPU and 4 GB suit up to about 50 developers. Use t4g.* with Architecture arm64.
+  Architecture:
+    Type: String
+    Default: amd64
+    AllowedValues: [amd64, arm64]
+  DiskGB:
+    Type: Number
+    Default: 30
+    MinValue: 20
+    MaxValue: 4096
+  JoinCode:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: A single-use code from the hub (Settings -> Scaling -> Add server) to join it as a satellite.
+  SpanDockVersion:
+    Type: String
+    Default: ""
+    AllowedPattern: "^(v[0-9]+\\.[0-9]+\\.[0-9]+)?$"
+  KeyName:
+    Type: String
+    Default: ""
+    Description: An EC2 key pair for SSH (optional).
+  SshCidr:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[0-9.]+/[0-9]+$"
+
+Conditions:
+  Arm: !Equals [!Ref Architecture, arm64]
+  HasKey: !Not [!Equals [!Ref KeyName, ""]]
+  HasSsh: !Not [!Equals [!Ref SshCidr, ""]]
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "SpanDock server: outbound only"
+      SecurityGroupIngress: !If
+        - HasSsh
+        - [{ IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref SshCidr, Description: SSH }]
+        - !Ref AWS::NoValue
+      Tags: [{ Key: app, Value: spandock }]
+
+  Server:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !If
+        - Arm
+        - "{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id}}"
+        - "{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}"
+      InstanceType: !Ref InstanceType
+      SecurityGroupIds: [!GetAtt SecurityGroup.GroupId]
+      KeyName: !If [HasKey, !Ref KeyName, !Ref AWS::NoValue]
+      MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: { VolumeType: gp3, VolumeSize: !Ref DiskGB, Encrypted: true, DeleteOnTermination: true }
+      Tags: [{ Key: Name, Value: !Ref AWS::StackName }, { Key: app, Value: spandock }]
+      UserData:
+        Fn::Base64: !Sub |
+          #cloud-config
+          package_update: true
+          packages:
+            - curl
+            - ca-certificates
+          runcmd:
+            - [bash, -c, "curl -fsSL --retry 3 https://www.spandock.com/deploy/install-server.sh | SPANDOCK_VERSION='${SpanDockVersion}' SPANDOCK_JOIN_CODE='${JoinCode}' bash"]
+
+Outputs:
+  InstanceId:
+    Value: !Ref Server
+  Activate:
+    Description: Where the activation link appears a few minutes after boot.
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2/home?region=${AWS::Region}#InstanceDetails:instanceId=${Server} -> Actions -> Monitor and troubleshoot -> Get system log"

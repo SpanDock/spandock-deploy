@@ -1,0 +1,16 @@
+# SpanDock server with Docker Compose: docker compose up -d, then docker compose logs spandock
+# for the activation link. No port is published: clients reach it over its encrypted tunnel,
+# which only connects out. Update with docker compose pull && docker compose up -d.
+services:
+  spandock:
+    image: ghcr.io/spandock/spandock:latest
+    restart: unless-stopped
+    environment:
+      # Accepts the EULA: https://www.spandock.com/legal/eula
+      SPANDOCK_ACCEPT_EULA: "1"
+      # Only for a satellite, on its first start: a single-use join code from the hub.
+      # SPANDOCK_JOIN_CODE: ""
+    volumes:
+      - spandock-data:/data
+volumes:
+  spandock-data:

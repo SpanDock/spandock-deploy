@@ -1,0 +1,64 @@
+# Oracle Cloud Resource Manager's form for the stack (Deploy to Oracle Cloud).
+title: SpanDock server
+description: A SpanDock server on Oracle Cloud, with no inbound port. The Always Free Ampere shape runs a large team.
+schemaVersion: 1.1.0
+version: "20261023"
+locale: en
+
+variableGroups:
+  - title: Server
+    variables: [name, shape, ocpus, memory_gb, disk_gb, availability_domain_number]
+  - title: Optional
+    variables: [join_code, spandock_version, ssh_public_key, allow_ssh_from]
+  - title: Filled in by Oracle Cloud
+    visible: false
+    variables: [tenancy_ocid, compartment_ocid, region]
+
+variables:
+  name:
+    type: string
+    title: Name
+    required: true
+  shape:
+    type: oci:core:instanceshape:name
+    title: Shape
+    description: VM.Standard.A1.Flex is in the Always Free tier (up to 4 OCPUs and 24 GB in all).
+    required: true
+    dependsOn:
+      compartmentId: ${compartment_ocid}
+  ocpus:
+    type: integer
+    title: OCPUs (Flex shapes)
+    minimum: 1
+    maximum: 16
+  memory_gb:
+    type: integer
+    title: Memory in GB (Flex shapes)
+    minimum: 4
+    maximum: 128
+  disk_gb:
+    type: integer
+    title: Disk in GB
+    minimum: 50
+    maximum: 2048
+  availability_domain_number:
+    type: integer
+    title: Availability domain (1, 2 or 3)
+    minimum: 1
+    maximum: 3
+  join_code:
+    type: password
+    title: Hub join code (only for a satellite)
+    required: false
+  spandock_version:
+    type: string
+    title: SpanDock version (empty for the latest)
+    required: false
+  ssh_public_key:
+    type: oci:core:ssh:publickey
+    title: SSH public key (optional)
+    required: false
+  allow_ssh_from:
+    type: string
+    title: Allow SSH from (a CIDR; empty keeps SSH closed)
+    required: false

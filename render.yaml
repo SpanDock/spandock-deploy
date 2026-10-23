@@ -1,0 +1,19 @@
+# Deploy to Render (https://render.com/deploy?repo=https://github.com/SpanDock/spandock-deploy):
+# SpanDock's server image as a background worker (no public HTTP service: clients reach it over
+# its encrypted tunnel, which only connects out), with a persistent disk at /data. The worker's
+# Logs show the link that activates the server, once. Workers with a disk need a paid plan.
+services:
+  - type: worker
+    name: spandock
+    runtime: image
+    image:
+      url: ghcr.io/spandock/spandock:latest
+    plan: standard
+    disk:
+      name: spandock-data
+      mountPath: /data
+      sizeGB: 20
+    envVars:
+      # Accepts the EULA: https://www.spandock.com/legal/eula
+      - key: SPANDOCK_ACCEPT_EULA
+        value: "1"

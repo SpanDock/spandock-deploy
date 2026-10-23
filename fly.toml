@@ -1,0 +1,24 @@
+# Fly.io: SpanDock's server image on a Machine with a volume at /data and no public service
+# (clients reach it over its encrypted tunnel, which only connects out).
+#   fly launch --from https://github.com/spandock/spandock-deploy --copy-config --no-deploy
+#   fly deploy
+#   fly logs        # the activation link
+# fly launch asks for the app's name and region.
+app = "spandock"
+primary_region = "fra"
+
+[build]
+  image = "ghcr.io/spandock/spandock:latest"
+
+[env]
+  # Accepts the EULA: https://www.spandock.com/legal/eula
+  SPANDOCK_ACCEPT_EULA = "1"
+
+[mounts]
+  source = "spandock_data"
+  destination = "/data"
+  initial_size = "20gb"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "4gb"
